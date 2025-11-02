@@ -167,7 +167,7 @@ const Loans = () => {
   const { data: loansData, isLoading, error, refetch } = useLoans();
   // Search customers when term is 1+ characters for names, or 2+ for other fields
   const shouldSearch = customerSearchTerm.length >= 1;
-  const { data: customers = [] } = useCustomerSearch(shouldSearch ? customerSearchTerm : "");
+  const { data: customers = [], isFetching: isSearchingCustomers } = useCustomerSearch(shouldSearch ? customerSearchTerm : "");
   const createLoanMutation = useCreateLoan();
   
   // Loan action mutations
@@ -206,7 +206,8 @@ const Loans = () => {
     active: loans.filter(loan => loan.status === 'ACTIVE').length,
     pending: loans.filter(loan => loan.status === 'PENDING').length,
     completed: loans.filter(loan => loan.status === 'COMPLETED').length,
-    overdue: loans.filter(loan => loan.status === 'OVERDUE').length,
+    // Use isOverdue flag or daysOverdue to ensure consistency with backend overdue logic
+    overdue: loans.filter(loan => (loan as any).isOverdue === true || ((loan as any).daysOverdue || 0) > 0).length,
     totalDisbursed: loans.reduce((sum, loan) => sum + loan.principalAmount, 0),
     totalGoldWeight: loans.reduce((sum, loan) => sum + loan.goldWeight, 0),
     averageLoanAmount: loans.length > 0 ? loans.reduce((sum, loan) => sum + loan.principalAmount, 0) / loans.length : 0
@@ -412,11 +413,66 @@ const Loans = () => {
   };
 
   const handleExport = () => {
-    // Export functionality placeholder
-    toast({
-      title: "Export Started",
-      description: "Loan data is being exported...",
-    });
+    // Build CSV on the client from the currently filtered loans
+    const header = [
+      'LoanNumber','Customer','Status','Principal','InterestRate','Tenure','EMI','Outstanding','DisbursedDate','MaturityDate'
+    ];
+    const rows = filteredLoans.map((loan) => [
+      loan.loanNumber,
+      loan.customerName,
+      loan.status,
+      String(loan.principalAmount ?? loan.loanAmount ?? 0),
+      String(loan.interestRate ?? 0),
+      String(loan.tenure ?? 0),
+      String(loan.emiAmount ?? 0),
+  String(loan.principalAmount ?? loan.loanAmount ?? 0),
+      loan.disbursedDate || '',
+      loan.dueDate || ''
+    ]);
+    const csv = [header, ...rows]
+      .map(cols => cols.map(v => {
+        const val = String(v ?? '');
+        return /[",\n]/.test(val) ? `"${val.replace(/"/g, '""')}"` : val;
+      }).join(','))
+      .join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `loans_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    toast({ title: 'Export Ready', description: 'Loans CSV has been downloaded.' });
+  };
+
+  const downloadLoanBill = async (loan: any) => {
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+      const response = await fetch(`http://localhost:3001/api/loans/${loan.id}/bill`, {
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : ''
+        }
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Failed to download bill (status ${response.status}) ${text}`);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `loan_bill_${loan.loanNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast({ title: 'Bill Downloaded', description: `Loan bill for ${loan.loanNumber} downloaded.` });
+    } catch (err: any) {
+      console.error('Download bill failed:', err);
+      toast({ title: 'Download Failed', description: err?.message || 'Could not download loan bill', variant: 'destructive' });
+    }
   };
 
   const addGoldItem = () => {
@@ -651,7 +707,7 @@ const Loans = () => {
                             </div>
                             
                             {/* Search Results Dropdown */}
-                            {customers.length > 0 && customerSearchTerm.length >= 1 && (
+                            {customers.length > 0 && customerSearchTerm.length >= 1 && !selectedCustomerId && (
                               <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
                                 <div className="p-2 bg-gray-50 border-b text-xs text-gray-600 font-medium">
                                   {customers.length} customer(s) found
@@ -716,7 +772,7 @@ const Loans = () => {
                             )}
 
                             {/* No results message */}
-                            {customerSearchTerm.length >= 1 && customers.length === 0 && shouldSearch && (
+                            {customerSearchTerm.length >= 1 && customers.length === 0 && shouldSearch && !selectedCustomerId && (
                               <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
                                 <Users className="h-8 w-8 mx-auto mb-2 text-gray-300" />
                                 <p className="text-sm">No customers found matching "{customerSearchTerm}"</p>
@@ -725,8 +781,8 @@ const Loans = () => {
                             )}
 
                             {/* Loading indicator */}
-                            {customerSearchTerm.length >= 1 && !customers.length && (
-                              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-center">
+                            {shouldSearch && isSearchingCustomers && !selectedCustomerId && (
+                              <div className="absolute z-10 w-full mt-1 bg-white/95 border border-gray-200 rounded-lg shadow-lg p-3 text-center">
                                 <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2 text-blue-500" />
                                 <p className="text-xs text-gray-500">Searching customers...</p>
                               </div>
@@ -1580,25 +1636,13 @@ const Loans = () => {
                               <Eye className="h-5 w-5" />
                             </Button>
 
-                            {/* Download/Generate Documents Button */}
+                            {/* Download Bill Button */}
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-9 w-9 p-0 rounded-full hover:bg-green-100 text-green-600 hover:text-green-700"
-                              onClick={() => {
-                                toast({
-                                  title: "Generating Documents",
-                                  description: `Preparing loan agreement for ${loan.loanNumber}`,
-                                });
-                                // Simulate document generation
-                                setTimeout(() => {
-                                  toast({
-                                    title: "Document Ready",
-                                    description: "Loan agreement downloaded successfully",
-                                  });
-                                }, 1500);
-                              }}
-                              title="Generate Loan Agreement"
+                              onClick={() => downloadLoanBill(loan)}
+                              title="Download Loan Bill"
                             >
                               <Download className="h-5 w-5" />
                             </Button>
@@ -1761,18 +1805,7 @@ const Loans = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  toast({
-                                    title: "Generating Documents",
-                                    description: `Preparing loan agreement for ${loan.loanNumber}`,
-                                  });
-                                  setTimeout(() => {
-                                    toast({
-                                      title: "Document Ready",
-                                      description: "Loan agreement downloaded successfully",
-                                    });
-                                  }, 1500);
-                                }}
+                                onClick={() => downloadLoanBill(loan)}
                               >
                                 <Download className="h-3 w-3" />
                               </Button>
@@ -1796,12 +1829,7 @@ const Loans = () => {
           payments={loanPayments?.data || []}
           formatCurrency={formatCurrency}
           formatDate={formatDate}
-          onDownload={() => {
-            toast({
-              title: "Generating Loan Agreement",
-              description: "Your document will download shortly",
-            });
-          }}
+          onDownload={() => selectedLoan && downloadLoanBill(selectedLoan)}
           onPrint={() => {
             toast({
               title: "Printing Loan Details",

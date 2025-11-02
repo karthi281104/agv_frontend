@@ -63,7 +63,7 @@ const CustomerLoansModal: React.FC<CustomerLoansModalProps> = ({
   const { data: customerLoansData, isLoading } = useQuery({
     queryKey: ['customer-loans', customer?.id],
     queryFn: async () => {
-      const response: any = await apiClient.get(`/api/customers/${customer?.id}/loans`);
+      const response: any = await apiClient.get(`/customers/${customer?.id}/loans`);
       return response.data;
     },
     enabled: !!customer?.id && isOpen
@@ -71,7 +71,7 @@ const CustomerLoansModal: React.FC<CustomerLoansModalProps> = ({
 
   if (!customer) return null;
 
-  const loansData = customerLoansData?.data;
+  const loansData = customerLoansData;
   const summary = loansData?.summary || {
     totalLoans: 0,
     activeLoans: 0,
@@ -115,15 +115,15 @@ const CustomerLoansModal: React.FC<CustomerLoansModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto pr-14 sm:pr-16">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <DialogTitle className="text-2xl font-bold">
-                {customer.firstName} {customer.lastName}
+                {customer.personalInfo?.fullName}
               </DialogTitle>
               <Badge variant="outline" className="text-sm">
-                ID: {customer.id.slice(0, 8)}...
+                ID: {customer.customerId || customer.id?.slice(0, 8)}
               </Badge>
             </div>
             <div className="flex items-center gap-2">
@@ -138,22 +138,19 @@ const CustomerLoansModal: React.FC<CustomerLoansModalProps> = ({
                   Edit
                 </Button>
               )}
-              <Button variant="ghost" size="sm" onClick={onClose}>
-                <X className="h-4 w-4" />
-              </Button>
             </div>
           </div>
           <DialogDescription className="flex items-center gap-4 text-base">
             <span className="flex items-center gap-1">
               <Phone className="h-4 w-4" />
-              {customer.phone}
+              {customer.contactInfo?.primaryMobile}
             </span>
-            {customer.email && (
+            {customer.contactInfo?.email && (
               <>
                 <span className="text-gray-400">•</span>
                 <span className="flex items-center gap-1">
                   <Mail className="h-4 w-4" />
-                  {customer.email}
+                  {customer.contactInfo?.email}
                 </span>
               </>
             )}
@@ -411,15 +408,15 @@ const CustomerLoansModal: React.FC<CustomerLoansModalProps> = ({
                     <label className="text-sm font-medium text-gray-600">Primary Phone</label>
                     <p className="font-semibold text-gray-900 flex items-center gap-2">
                       <Phone className="h-4 w-4 text-blue-500" />
-                      {customer.phone}
+                      {customer.contactInfo?.primaryMobile}
                     </p>
                   </div>
-                  {customer.email && (
+                  {customer.contactInfo?.email && (
                     <div>
                       <label className="text-sm font-medium text-gray-600">Email</label>
                       <p className="font-semibold text-gray-900 flex items-center gap-2">
                         <Mail className="h-4 w-4 text-blue-500" />
-                        {customer.email}
+                        {customer.contactInfo?.email}
                       </p>
                     </div>
                   )}
@@ -437,11 +434,11 @@ const CustomerLoansModal: React.FC<CustomerLoansModalProps> = ({
                   <div className="flex items-start gap-2">
                     <MapPin className="h-4 w-4 text-red-500 mt-1" />
                     <div>
-                      <p className="font-medium text-gray-900">{customer.address}</p>
+                      <p className="font-medium text-gray-900">{customer.contactInfo?.address?.street}</p>
                       <p className="text-sm text-gray-600">
-                        {customer.city}, {customer.state}
+                        {customer.contactInfo?.address?.city}, {customer.contactInfo?.address?.state}
                       </p>
-                      <p className="text-sm text-gray-600">PIN: {customer.pincode}</p>
+                      <p className="text-sm text-gray-600">PIN: {customer.contactInfo?.address?.pincode}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -488,16 +485,16 @@ const CustomerLoansModal: React.FC<CustomerLoansModalProps> = ({
                   <div>
                     <label className="text-sm font-medium text-gray-600">Account Status</label>
                     <p className="mt-1">
-                      <Badge className={customer.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
-                        {customer.isActive ? 'Active' : 'Inactive'}
+                      <Badge className={customer.status === 'inactive' ? 'bg-gray-100 text-gray-800' : 'bg-green-100 text-green-800'}>
+                        {customer.status === 'inactive' ? 'Inactive' : 'Active'}
                       </Badge>
                     </p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-600">KYC Status</label>
                     <p className="mt-1">
-                      <Badge className={customer.kycVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
-                        {customer.kycVerified ? 'Verified' : 'Pending'}
+                      <Badge className={customer.status === 'pending_verification' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}>
+                        {customer.status === 'pending_verification' ? 'Pending' : 'Verified'}
                       </Badge>
                     </p>
                   </div>

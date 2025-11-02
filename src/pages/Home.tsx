@@ -167,9 +167,11 @@ const Home = () => {
                 <p className="text-muted-foreground mb-6">
                   Calculate monthly loan payments based on principal amount, interest rate, and loan tenure.
                 </p>
-                <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-white">
-                  Use Calculator
-                </Button>
+                <Link to="/tools/calculators">
+                  <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-white">
+                    Use Calculator
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
 
@@ -183,9 +185,11 @@ const Home = () => {
                 <p className="text-muted-foreground mb-6">
                   Estimate loan amounts against gold based on weight, purity, and current gold rates.
                 </p>
-                <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-white">
-                  Use Calculator
-                </Button>
+                <Link to="/tools/calculators">
+                  <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-white">
+                    Use Calculator
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
 
@@ -199,9 +203,11 @@ const Home = () => {
                 <p className="text-muted-foreground mb-6">
                   Convert between carat and percentage purity to accurately assess gold asset values.
                 </p>
-                <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-white">
-                  Use Converter
-                </Button>
+                <Link to="/tools/calculators">
+                  <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-white">
+                    Use Converter
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
           </div>

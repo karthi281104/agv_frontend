@@ -25,7 +25,7 @@ import {
   Clock,
   FileText,
   DollarSign,
-  TrendingUp,
+  Eye,
   History
 } from 'lucide-react';
 import { Customer } from '@/types/customer';
@@ -87,7 +87,7 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto pr-14 sm:pr-16">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -366,7 +366,7 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
 
                 <div className="pt-4">
                   <Button className="w-full" variant="outline">
-                    <TrendingUp className="h-4 w-4 mr-2" />
+                    <Eye className="h-4 w-4 mr-2" />
                     View Loan Details
                   </Button>
                 </div>

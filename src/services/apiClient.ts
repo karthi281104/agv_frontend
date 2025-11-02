@@ -1,5 +1,5 @@
 // API Configuration and Base Setup
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 // API Client with authentication support
 class ApiClient {
@@ -38,21 +38,27 @@ class ApiClient {
       },
     };
 
-    console.log('API Request:', {
-      url,
-      method: config.method || 'GET',
-      headers: config.headers,
-      body: config.body
-    });
+    if (import.meta.env.DEV) {
+      console.log('API Request:', {
+        url,
+        method: config.method || 'GET',
+        headers: config.headers,
+        body: config.body
+      });
+    }
 
     try {
       const response = await fetch(url, config);
       
-      console.log('API Response Status:', response.status);
+      if (import.meta.env.DEV) {
+        console.log('API Response Status:', response.status);
+      }
       
       if (!response.ok) {
         const responseText = await response.text();
-        console.log('Error response body:', responseText);
+        if (import.meta.env.DEV) {
+          console.log('Error response body:', responseText);
+        }
         
         if (response.status === 401) {
           // Token expired or invalid
@@ -72,10 +78,14 @@ class ApiClient {
       }
 
       const responseData = await response.json();
-      console.log('API Response Data:', responseData);
+      if (import.meta.env.DEV) {
+        console.log('API Response Data:', responseData);
+      }
       return responseData;
     } catch (error) {
-      console.error('API request failed:', error);
+      if (import.meta.env.DEV) {
+        console.error('API request failed:', error);
+      }
       throw error;
     }
   }
@@ -122,9 +132,10 @@ class ApiClient {
   }
 
   // File upload method
-  async uploadFile<T>(endpoint: string, file: File, additionalData?: Record<string, any>): Promise<T> {
+  async uploadFile<T>(endpoint: string, file: File, additionalData?: Record<string, any>, options?: { fieldName?: string }): Promise<T> {
     const formData = new FormData();
-    formData.append('file', file);
+    const fieldName = options?.fieldName || 'file';
+    formData.append(fieldName, file);
     
     if (additionalData) {
       Object.keys(additionalData).forEach(key => {

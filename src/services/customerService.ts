@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient';
+import { apiClient, API_BASE_URL } from './apiClient';
 import { Customer, CustomerFormData, CustomerSearchFilters, CustomerListResponse } from '@/types/customer';
 
 // Customer Stats interface
@@ -29,6 +29,14 @@ const formatCurrency = (amount: number): string => {
 
 // Helper function to map backend customer data to frontend format
 const mapBackendCustomerToFrontend = (backendCustomer: any): Customer => {
+  // Derive status from backend flags when explicit status is not provided
+  let derivedStatus: Customer['status'] = 'active';
+  if (backendCustomer?.isActive === false) {
+    derivedStatus = 'inactive';
+  } else if (backendCustomer?.kycVerified === false) {
+    derivedStatus = 'pending_verification';
+  }
+
   return {
     id: backendCustomer.id,
     customerId: backendCustomer.customerId || `CUS${backendCustomer.id.slice(-3)}`,
@@ -69,14 +77,14 @@ const mapBackendCustomerToFrontend = (backendCustomer: any): Customer => {
         capturedAt: backendCustomer.createdAt
       } : undefined
     },
-    status: backendCustomer.status || 'active',
+    status: backendCustomer.status || derivedStatus,
     createdAt: backendCustomer.createdAt,
     updatedAt: backendCustomer.updatedAt,
     createdBy: backendCustomer.createdBy || 'system',
     loanSummary: {
-      activeLoans: backendCustomer._count?.loans || 0,
-      totalDisbursed: backendCustomer.totalDisbursed || 0,
-      totalOutstanding: backendCustomer.totalOutstanding || 0,
+      activeLoans: backendCustomer.activeLoans ?? backendCustomer._count?.loans ?? 0,
+      totalDisbursed: backendCustomer.totalDisbursed ?? 0,
+      totalOutstanding: backendCustomer.totalOutstanding ?? 0,
       paymentHistory: 'good'
     }
   };
@@ -101,6 +109,9 @@ export const customerService = {
       
       if (filters.status && filters.status.length > 0) {
         params.append('status', filters.status.join(','));
+      }
+      if (typeof filters.hasActiveLoans === 'boolean') {
+        params.append('hasActiveLoans', String(filters.hasActiveLoans));
       }
       
       const response: any = await apiClient.get(`/customers?${params.toString()}`);
@@ -192,7 +203,7 @@ export const customerService = {
   },
 
   // Update customer
-  async updateCustomer(id: string, formData: Partial<CustomerFormData>): Promise<Customer> {
+  async updateCustomer(id: string, formData: Partial<CustomerFormData> & { kycVerified?: boolean; isActive?: boolean }): Promise<Customer> {
     try {
       const backendData: any = {};
       
@@ -200,19 +211,17 @@ export const customerService = {
         backendData.firstName = formData.fullName.split(' ')[0];
         backendData.lastName = formData.fullName.split(' ').slice(1).join(' ') || formData.fullName.split(' ')[0];
       }
-      
-      if (formData.fatherName) backendData.fatherName = formData.fatherName;
-      if (formData.motherName) backendData.motherName = formData.motherName;
+      // Only map fields that exist in Prisma schema
       if (formData.primaryMobile) backendData.phone = formData.primaryMobile;
-      if (formData.secondaryMobile) backendData.alternatePhone = formData.secondaryMobile;
       if (formData.email) backendData.email = formData.email;
       if (formData.street) backendData.address = formData.street;
       if (formData.city) backendData.city = formData.city;
       if (formData.state) backendData.state = formData.state;
       if (formData.pincode) backendData.pincode = formData.pincode;
-      if (formData.landmark) backendData.landmark = formData.landmark;
       if (formData.aadharNumber) backendData.aadharNumber = formData.aadharNumber;
       if (formData.panNumber) backendData.panNumber = formData.panNumber;
+      if (typeof formData.kycVerified === 'boolean') backendData.kycVerified = formData.kycVerified;
+      if (typeof formData.isActive === 'boolean') backendData.isActive = formData.isActive;
 
       const response: any = await apiClient.put(`/customers/${id}`, backendData);
       // Handle the backend response structure: { success, message, data: customer }
@@ -261,11 +270,22 @@ export const customerService = {
   },
 
   // Export customers
-  async exportCustomers(format: 'pdf' | 'excel'): Promise<Blob> {
+  async exportCustomers(args?: { format?: 'csv' | 'pdf'; filters?: CustomerSearchFilters }): Promise<Blob> {
     try {
+      const format = args?.format || 'csv';
+      const filters = args?.filters;
+
+      // Build query params
+      const params = new URLSearchParams();
+      params.set('format', format);
+      if (filters?.search) params.set('search', filters.search);
+      if (filters?.status && filters.status.length > 0) params.set('status', filters.status.join(','));
+      if (typeof filters?.hasActiveLoans === 'boolean') params.set('hasActiveLoans', String(filters.hasActiveLoans));
+
       // For export, we need to handle blob response differently
-      const url = `${apiClient['baseURL']}/customers/export?format=${format}`;
-      const token = localStorage.getItem('auth_token');
+  const url = `${API_BASE_URL}/customers/export?${params.toString()}`;
+      // Align token key with apiClient which uses 'token'
+      const token = localStorage.getItem('token');
       
       const response = await fetch(url, {
         headers: {
@@ -274,7 +294,9 @@ export const customerService = {
       });
       
       if (!response.ok) {
-        throw new Error('Export failed');
+        const errText = await response.text().catch(() => '');
+        console.error('Export failed', { status: response.status, body: errText });
+        throw new Error(`Export failed (status ${response.status})`);
       }
       
       return await response.blob();
@@ -290,13 +312,17 @@ export const customerService = {
       if (Array.isArray(files)) {
         // Handle array of files
         for (const file of files) {
-          await apiClient.uploadFile(`/customers/${customerId}/documents`, file);
+          await apiClient.uploadFile(`/upload/document`, file, { customerId }, { fieldName: 'file' });
         }
       } else {
         // Handle object with specific file types
         for (const [key, file] of Object.entries(files)) {
           if (file) {
-            await apiClient.uploadFile(`/customers/${customerId}/documents`, file, { type: key });
+            if (key === 'photo') {
+              await apiClient.uploadFile(`/upload/profile-photo`, file, { customerId }, { fieldName: 'photo' });
+            } else {
+              await apiClient.uploadFile(`/upload/document`, file, { customerId, documentType: key }, { fieldName: 'file' });
+            }
           }
         }
       }

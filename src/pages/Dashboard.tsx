@@ -84,23 +84,23 @@ const Dashboard = () => {
     },
     {
       title: "Total Disbursed",
-      value: stats ? dashboardService.formatCurrency(stats.monthlyDisbursed) : "₹0",
+      value: stats ? dashboardService.formatCurrency(stats.totalDisbursed) : "₹0",
       change: "+8.3%",
       changeType: "increase",
       icon: IndianRupee,
       color: "text-green-600",
       bgColor: "bg-green-50",
-      description: "Amount disbursed this month"
+      description: "Total amount disbursed"
     },
     {
-      title: "Interest Earned",
-      value: stats ? dashboardService.formatCurrency(stats.totalInterestEarned) : "₹0",
-      change: "+15.7%",
+      title: "Outstanding Amount",
+      value: stats ? dashboardService.formatCurrency(stats.outstandingAmount) : "₹0",
+      change: "",
       changeType: "increase",
-      icon: Percent,
+      icon: CreditCard,
       color: "text-purple-600",
       bgColor: "bg-purple-50",
-      description: "Total interest accrued"
+      description: "Current outstanding across active loans"
     },
     {
       title: "Overdue Amount",
@@ -194,11 +194,12 @@ const Dashboard = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => exportDashboard('pdf')}
+                onClick={() => exportDashboard('csv')}
                 className="flex items-center gap-2 flex-1 sm:flex-initial"
+                title="Export dashboard data as CSV"
               >
                 <Download className="h-4 w-4" />
-                <span className="hidden sm:inline">Export</span>
+                <span className="hidden sm:inline">Export CSV</span>
               </Button>
             </div>
           </div>
@@ -270,7 +271,12 @@ const Dashboard = () => {
         <Card>
           <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <CardTitle className="text-base sm:text-lg">Recent Activities</CardTitle>
-            <Button variant="ghost" size="sm" className="w-full sm:w-auto">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={() => { window.location.href = '/repayments'; }}
+            >
               <Eye className="h-4 w-4 mr-2" />
               View All
             </Button>

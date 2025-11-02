@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import CustomerLoansModal from "@/components/CustomerLoansModal";
 import { Button } from "@/components/ui/button";
@@ -114,20 +114,27 @@ const Customers = () => {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [fingerprintStatus, setFingerprintStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle');
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [hasActiveLoans, setHasActiveLoans] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [sortBy, setSortBy] = useState<'createdDesc'|'createdAsc'|'nameAsc'|'nameDesc'|'outstandingDesc'>('createdDesc');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { toast } = useToast();
 
   // Build search filters
   const filters: CustomerSearchFilters = {
-    search: searchTerm || undefined,
+    search: debouncedSearch || undefined,
     status: selectedStatus === 'all' ? undefined : [selectedStatus as any],
+    hasActiveLoans: hasActiveLoans || undefined,
   };
 
   // React Query hooks
-  const { data: customersData, isLoading, error } = useCustomers(filters, currentPage, 10);
-  const { data: stats } = useCustomerStats();
+  const { data: customersData, isLoading, error, refetch: refetchCustomers } = useCustomers(filters, currentPage, pageSize) as any;
+  const { data: stats, refetch: refetchStats } = useCustomerStats() as any;
   const createCustomerMutation = useCreateCustomer();
   const updateCustomerMutation = useUpdateCustomer();
   const deleteCustomerMutation = useDeleteCustomer();
@@ -145,6 +152,54 @@ const Customers = () => {
     resolver: zodResolver(customerSchema),
     mode: "onChange",
   });
+
+  // Debounce search term
+  React.useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchTerm), 400);
+    return () => clearTimeout(id);
+  }, [searchTerm]);
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await Promise.all([refetchCustomers(), refetchStats?.()]);
+      toast({ title: 'Refreshed', description: 'Customers and stats updated.' });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setSelectedStatus('all');
+    setHasActiveLoans(false);
+    setCurrentPage(1);
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const bulkUpdate = async (updates: Partial<FormData> & { kycVerified?: boolean; isActive?: boolean }) => {
+    if (!customersData) return;
+    const targets = customersData.customers.filter((c: any) => selectedIds.has(c.id));
+    if (targets.length === 0) return;
+    try {
+      setIsRefreshing(true);
+      await Promise.allSettled(targets.map((c: any) => updateCustomerMutation.mutateAsync({ id: c.id, formData: updates as any })));
+      toast({ title: 'Bulk action completed', description: `${targets.length} customer(s) updated.` });
+      clearSelection();
+      await refetchCustomers();
+      await refetchStats?.();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const formatAadharNumber = (value: string) => {
     const cleaned = value.replace(/\s/g, '');
@@ -273,17 +328,17 @@ const Customers = () => {
   };
 
   const handleExport = () => {
-    exportCustomersMutation.mutate('excel', {
+    exportCustomersMutation.mutate({ format: 'csv', filters }, {
       onSuccess: () => {
         toast({
           title: "Export Successful",
-          description: "Customer data has been exported to Excel file.",
+          description: "Customer data has been exported to a CSV file.",
         });
       },
-      onError: () => {
+      onError: (err: any) => {
         toast({
           title: "Export Failed",
-          description: "There was an error exporting customer data.",
+          description: (err?.message as string) || "There was an error exporting customer data.",
           variant: "destructive",
         });
       },
@@ -448,6 +503,15 @@ const Customers = () => {
                   )}
                   <span className="hidden sm:inline">Export CSV</span>
                   <span className="sm:hidden">Export</span>
+                </Button>
+                <Button
+                  onClick={handleRefresh}
+                  variant="outline"
+                  className="flex items-center gap-2 flex-1 sm:flex-initial"
+                  disabled={isRefreshing}
+                >
+                  {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Loader2 className="h-4 w-4" />}
+                  <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                 </Button>
                 
                 <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -967,7 +1031,7 @@ const Customers = () => {
           {/* Search and Filter Section */}
           <Card className="mb-4 md:mb-6">
             <CardContent className="p-4 md:p-6">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 md:gap-4">
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 md:gap-4">
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <Input
@@ -989,6 +1053,37 @@ const Customers = () => {
                     <SelectItem value="inactive">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button
+                  variant={hasActiveLoans ? 'default' : 'outline'}
+                  onClick={() => setHasActiveLoans(v => !v)}
+                >
+                  With Active Loans
+                </Button>
+                <Select value={sortBy} onValueChange={(v:any)=>setSortBy(v)}>
+                  <SelectTrigger className="w-full sm:w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="createdDesc">Newest First</SelectItem>
+                    <SelectItem value="createdAsc">Oldest First</SelectItem>
+                    <SelectItem value="nameAsc">Name A→Z</SelectItem>
+                    <SelectItem value="nameDesc">Name Z→A</SelectItem>
+                    <SelectItem value="outstandingDesc">Outstanding High→Low</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={String(pageSize)} onValueChange={(v:any)=>{ setPageSize(Number(v)); setCurrentPage(1); }}>
+                  <SelectTrigger className="w-full sm:w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10 / page</SelectItem>
+                    <SelectItem value="20">20 / page</SelectItem>
+                    <SelectItem value="50">50 / page</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleResetFilters} variant="ghost">
+                  Reset
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -1025,10 +1120,37 @@ const Customers = () => {
               ) : (
                 <>
                   {/* Desktop Table View */}
+                  {selectedIds.size > 0 && (
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Selected: {selectedIds.size}</span>
+                      <Button variant="outline" size="sm" onClick={() => bulkUpdate({ kycVerified: true } as any)}>
+                        Verify KYC
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => bulkUpdate({ isActive: true } as any)}>
+                        Activate
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => bulkUpdate({ isActive: false } as any)}>
+                        Deactivate
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={clearSelection}>Clear</Button>
+                    </div>
+                  )}
                   <div className="hidden lg:block overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-10">
+                            <input
+                              type="checkbox"
+                              onChange={(e)=>{
+                                const all = new Set<string>();
+                                customersData?.customers.forEach((c:any)=>all.add(c.id));
+                                setSelectedIds(e.target.checked ? all : new Set());
+                              }}
+                              checked={customersData?.customers?.length>0 && customersData?.customers?.every((c:any)=>selectedIds.has(c.id))}
+                              aria-label="Select all"
+                            />
+                          </TableHead>
                           <TableHead>Customer ID</TableHead>
                           <TableHead>Name</TableHead>
                           <TableHead>Contact</TableHead>
@@ -1041,15 +1163,23 @@ const Customers = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {customersData?.customers.map((customer) => (
+                        {(customersData?.customers || []).slice().sort((a:any,b:any)=>{
+                          if (sortBy === 'createdDesc') return new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime();
+                          if (sortBy === 'createdAsc') return new Date(a.createdAt).getTime()-new Date(b.createdAt).getTime();
+                          if (sortBy === 'nameAsc') return a.personalInfo.fullName.localeCompare(b.personalInfo.fullName);
+                          if (sortBy === 'nameDesc') return b.personalInfo.fullName.localeCompare(a.personalInfo.fullName);
+                          if (sortBy === 'outstandingDesc') return (b.loanSummary.totalOutstanding||0)-(a.loanSummary.totalOutstanding||0);
+                          return 0;
+                        }).map((customer) => (
                           <TableRow key={customer.id}>
+                            <TableCell>
+                              <input type="checkbox" checked={selectedIds.has(customer.id)} onChange={()=>toggleSelect(customer.id)} aria-label="Select row" />
+                            </TableCell>
                             <TableCell className="font-medium">{customer.customerId}</TableCell>
                             <TableCell>
                               <div>
                                 <div className="font-medium">{customer.personalInfo.fullName}</div>
-                                <div className="text-sm text-gray-500">
-                                  S/O: {customer.personalInfo.fatherName}
-                                </div>
+                                {/* Removed unsupported father name from schema */}
                               </div>
                             </TableCell>
                             <TableCell>
@@ -1074,7 +1204,12 @@ const Customers = () => {
                             </TableCell>
                             <TableCell>{getStatusBadge(customer.status)}</TableCell>
                             <TableCell>
-                              <Badge variant="outline">
+                              <Badge 
+                                variant="outline"
+                                className="cursor-pointer"
+                                onClick={() => handleViewCustomer(customer)}
+                                title="View active loans"
+                              >
                                 {customer.loanSummary.activeLoans}
                               </Badge>
                             </TableCell>
@@ -1118,9 +1253,36 @@ const Customers = () => {
                                       <Eye className="h-4 w-4 mr-2" />
                                       View Details
                                     </DropdownMenuItem>
+                                    {customer.status === 'pending_verification' && (
+                                      <DropdownMenuItem
+                                        onClick={async () => {
+                                          try {
+                                            await updateCustomerMutation.mutateAsync({ id: customer.id, formData: { kycVerified: true } as any });
+                                            toast({ title: 'KYC Verified', description: `${customer.personalInfo.fullName} is now verified.` });
+                                          } catch (e) {
+                                            toast({ title: 'Verification failed', description: 'Could not verify KYC.', variant: 'destructive' });
+                                          }
+                                        }}
+                                      >
+                                        <CheckCircle className="h-4 w-4 mr-2" />
+                                        Verify KYC
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
                                       <Pencil className="h-4 w-4 mr-2" />
                                       Edit Customer
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={async ()=>{
+                                      try {
+                                        const makeActive = customer.status === 'inactive';
+                                        await updateCustomerMutation.mutateAsync({ id: customer.id, formData: { isActive: makeActive } as any });
+                                        toast({ title: makeActive ? 'Activated' : 'Deactivated', description: customer.personalInfo.fullName });
+                                      } catch {
+                                        toast({ title: 'Update failed', description: 'Could not update status.', variant: 'destructive' });
+                                      }
+                                    }}>
+                                      <Pencil className="h-4 w-4 mr-2" />
+                                      {customer.status === 'inactive' ? 'Activate' : 'Deactivate'}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem 
                                       onClick={() => {
@@ -1166,7 +1328,7 @@ const Customers = () => {
                                   {getStatusBadge(customer.status)}
                                 </div>
                                 <p className="text-xs text-gray-500">ID: {customer.customerId}</p>
-                                <p className="text-xs text-gray-500">S/O: {customer.personalInfo.fatherName}</p>
+                                {/* Father name not stored; omit line */}
                               </div>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -1181,6 +1343,21 @@ const Customers = () => {
                                     <Eye className="h-4 w-4 mr-2" />
                                     View Details
                                   </DropdownMenuItem>
+                                    {customer.status === 'pending_verification' && (
+                                      <DropdownMenuItem
+                                        onClick={async () => {
+                                          try {
+                                            await updateCustomerMutation.mutateAsync({ id: customer.id, formData: { kycVerified: true } as any });
+                                            toast({ title: 'KYC Verified', description: `${customer.personalInfo.fullName} is now verified.` });
+                                          } catch (e) {
+                                            toast({ title: 'Verification failed', description: 'Could not verify KYC.', variant: 'destructive' });
+                                          }
+                                        }}
+                                      >
+                                        <CheckCircle className="h-4 w-4 mr-2" />
+                                        Verify KYC
+                                      </DropdownMenuItem>
+                                    )}
                                   <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
                                     <Pencil className="h-4 w-4 mr-2" />
                                     Edit Customer
@@ -1281,10 +1458,10 @@ const Customers = () => {
               )}
 
               {/* Pagination */}
-              {customersData && customersData.total > 10 && (
+              {customersData && customersData.total > pageSize && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t">
                   <div className="text-sm text-gray-500 order-2 sm:order-1">
-                    Page {currentPage} of {Math.ceil(customersData.total / 10)}
+                    Page {currentPage} of {Math.ceil(customersData.total / pageSize)}
                   </div>
                   <div className="flex items-center gap-2 order-1 sm:order-2">
                     <Button

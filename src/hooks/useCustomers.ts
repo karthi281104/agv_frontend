@@ -59,7 +59,7 @@ export function useUpdateCustomer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, formData }: { id: string; formData: Partial<CustomerFormData> }) =>
+    mutationFn: ({ id, formData }: { id: string; formData: Partial<CustomerFormData> & { kycVerified?: boolean; isActive?: boolean } }) =>
       customerService.updateCustomer(id, formData),
     onSuccess: (updatedCustomer) => {
       // Update the specific customer cache
@@ -116,13 +116,15 @@ export function useUploadCustomerDocuments() {
 // Hook to export customers
 export function useExportCustomers() {
   return useMutation({
-    mutationFn: (format: 'pdf' | 'excel' = 'excel') => customerService.exportCustomers(format),
-    onSuccess: (blob, format) => {
+    mutationFn: (args?: { format?: 'csv' | 'pdf'; filters?: CustomerSearchFilters }) =>
+      customerService.exportCustomers(args),
+    onSuccess: (blob, args) => {
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `customers_${new Date().toISOString().split('T')[0]}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+      const format = args?.format || 'csv';
+      link.download = `customers_${new Date().toISOString().split('T')[0]}.${format === 'pdf' ? 'pdf' : 'csv'}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

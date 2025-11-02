@@ -14,6 +14,7 @@ import Repayments from "./pages/Repayments";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Calculators from "./pages/Calculators";
+import PublicCalculators from "./pages/PublicCalculators";
 import OverduePage from "./pages/Overdue";
 import NotFound from "./pages/NotFound";
 
@@ -29,6 +30,7 @@ const App = () => (
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Home />} />
+            <Route path="/tools/calculators" element={<PublicCalculators />} />
             <Route 
               path="/login" 
               element={

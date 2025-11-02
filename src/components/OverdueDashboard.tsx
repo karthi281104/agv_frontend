@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, Phone, Mail, IndianRupee, Calendar, Clock } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, Phone, Mail, IndianRupee, Calendar, Clock, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -11,8 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
-import { useOverdueLoans, useOverdueStatistics, useUpdateAllOverdue } from '../hooks/useOverdue';
+import { useOverdueLoans, useOverdueStatistics, useUpdateAllOverdue, useUpdateLoanOverdue, useCheckDefault } from '../hooks/useOverdue';
 import { OverdueLoan } from '../services/overdueService';
+import { useToast } from '../hooks/use-toast';
 
 export function OverdueDashboard() {
   const [filter, setFilter] = useState<'all' | '0-30' | '30-60' | '60-90' | '90+'>('all');
@@ -35,9 +36,12 @@ export function OverdueDashboard() {
   const { data: loansResponse, isLoading: loansLoading, refetch: refetchLoans } = useOverdueLoans(getFilters());
   const { data: statsResponse, isLoading: statsLoading } = useOverdueStatistics();
   const updateAllMutation = useUpdateAllOverdue();
+  const updateLoanMutation = useUpdateLoanOverdue();
+  const checkDefaultMutation = useCheckDefault();
+  const { toast } = useToast();
 
-  const overdueLoans = loansResponse?.data || [];
-  const stats = statsResponse?.data;
+  const overdueLoans = loansResponse || [];
+  const stats = statsResponse;
 
   const handleRefresh = async () => {
     await updateAllMutation.mutateAsync();
@@ -73,6 +77,43 @@ export function OverdueDashboard() {
     });
   };
 
+  const handleExportCSV = () => {
+    if (!overdueLoans || overdueLoans.length === 0) {
+      toast({ title: 'No data', description: 'There are no overdue loans to export.' });
+      return;
+    }
+    const header = [
+      'LoanNumber','Customer','Phone','Email','Outstanding','Penalty','DaysOverdue','NextDueDate','OverdueSince'
+    ];
+    const rows = overdueLoans.map((loan: OverdueLoan) => [
+      loan.loanNumber,
+      `${loan.customer.firstName} ${loan.customer.lastName}`.trim(),
+      loan.customer.phone || '',
+      loan.customer.email || '',
+      String(loan.overdueAmount ?? 0),
+      String(loan.penaltyAmount ?? 0),
+      String(loan.daysOverdue ?? 0),
+      loan.nextDueDate ? new Date(loan.nextDueDate).toISOString() : '',
+      loan.overdueSince ? new Date(loan.overdueSince).toISOString() : ''
+    ]);
+    const csv = [header, ...rows]
+      .map(cols => cols.map(v => {
+        const val = String(v ?? '');
+        return /[",\n]/.test(val) ? `"${val.replace(/"/g, '""')}"` : val;
+      }).join(','))
+      .join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `overdue_loans_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    toast({ title: 'Exported', description: 'Overdue loans CSV has been downloaded.' });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -81,22 +122,31 @@ export function OverdueDashboard() {
           <h1 className="text-3xl font-bold">Overdue Management</h1>
           <p className="text-muted-foreground">Monitor and manage overdue loans</p>
         </div>
-        <Button 
-          onClick={handleRefresh}
-          disabled={updateAllMutation.isPending}
-        >
-          {updateAllMutation.isPending ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Updating...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Refresh All
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            onClick={handleExportCSV}
+            variant="outline"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export CSV
+          </Button>
+          <Button 
+            onClick={handleRefresh}
+            disabled={updateAllMutation.isPending}
+          >
+            {updateAllMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Updating...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh All
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -237,6 +287,7 @@ export function OverdueDashboard() {
                     <TableHead>Days Overdue</TableHead>
                     <TableHead>Next Due Date</TableHead>
                     <TableHead>Overdue Since</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -281,6 +332,35 @@ export function OverdueDashboard() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(loan.overdueSince)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={updateLoanMutation.isPending}
+                            onClick={() => updateLoanMutation.mutate(loan.id)}
+                          >
+                            {updateLoanMutation.isPending ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              'Update'
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={checkDefaultMutation.isPending || (loan.daysOverdue ?? 0) < 90}
+                            onClick={() => checkDefaultMutation.mutate({ loanId: loan.id, thresholdDays: 90 })}
+                            title={(loan.daysOverdue ?? 0) < 90 ? 'Available for 90+ days overdue' : 'Check default'}
+                          >
+                            {checkDefaultMutation.isPending ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              'Check Default'
+                            )}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

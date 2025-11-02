@@ -98,6 +98,63 @@ const Repayments = () => {
     }
   });
 
+  const exportPaymentsCSV = () => {
+    const header = ['ReceiptNo','LoanNumber','Customer','Amount','Date','Method','Status'];
+    const rows = (paymentsData || [])
+      .filter((p: any) => p.paymentType !== 'LOAN_DISBURSEMENT')
+      .map((p: any) => [
+        p.receiptNumber || p.id?.slice(0,8),
+        p.loan?.loanNumber || '',
+        p.loan?.customer ? `${p.loan.customer.firstName} ${p.loan.customer.lastName}` : '',
+        String(p.amount ?? 0),
+        p.paymentDate ? new Date(p.paymentDate).toISOString() : '',
+        (p.paymentMethod || '').toString(),
+        (p.status || '').toString(),
+      ]);
+    const csv = [header, ...rows]
+      .map(cols => cols.map(v => {
+        const val = String(v ?? '');
+        return /[",\n]/.test(val) ? `"${val.replace(/"/g, '""')}"` : val;
+      }).join(','))
+      .join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `payments_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    toast({ title: 'Export Ready', description: 'Payments CSV has been downloaded.' });
+  };
+
+  const downloadReceipt = async (paymentId: string, receiptNumber?: string) => {
+    try {
+      const token = getToken();
+      const response = await fetch(`http://localhost:3001/api/payments/${paymentId}/receipt`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Failed to download receipt (status ${response.status}) ${text}`);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `receipt_${receiptNumber || paymentId.slice(0,8)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast({ title: 'Receipt Downloaded', description: 'Payment receipt downloaded.' });
+    } catch (err: any) {
+      console.error('Download receipt failed:', err);
+      toast({ title: 'Download Failed', description: err?.message || 'Could not download receipt', variant: 'destructive' });
+    }
+  };
+
   // Create payment mutation
   const createPaymentMutation = useMutation({
     mutationFn: async (paymentData: any) => {
@@ -290,7 +347,13 @@ const Repayments = () => {
                 <p className="text-sm sm:text-base text-gray-600 mt-2">Manage loan repayments and track collection history</p>
               </div>
               
-              <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={exportPaymentsCSV} className="w-full sm:w-auto">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export CSV
+                </Button>
+
+                <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 w-full sm:w-auto">
                     <Plus className="h-4 w-4 mr-2" />
@@ -470,7 +533,8 @@ const Repayments = () => {
                     </DialogFooter>
                   </form>
                 </DialogContent>
-              </Dialog>
+                </Dialog>
+              </div>
             </div>
           </div>
 
@@ -717,6 +781,7 @@ const Repayments = () => {
                           <TableHead>Date</TableHead>
                           <TableHead>Method</TableHead>
                           <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -744,6 +809,12 @@ const Repayments = () => {
                             </TableCell>
                             <TableCell>
                               {getStatusBadge(payment.status)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button size="sm" variant="outline" onClick={() => downloadReceipt(payment.id, payment.receiptNumber)}>
+                                <Receipt className="h-4 w-4 mr-1" />
+                                Download
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -802,6 +873,16 @@ const Repayments = () => {
                                 </div>
                               </div>
                             </div>
+
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full"
+                              onClick={() => downloadReceipt(payment.id, payment.receiptNumber)}
+                            >
+                              <Receipt className="h-4 w-4 mr-1" />
+                              Download Receipt
+                            </Button>
                           </div>
                         </CardContent>
                       </Card>

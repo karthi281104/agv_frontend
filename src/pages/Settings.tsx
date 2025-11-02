@@ -44,6 +44,8 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import userService from "@/services/userService";
+import settingsService from "@/services/settingsService";
 
 // Get token helper
 const getToken = () => {
@@ -52,7 +54,7 @@ const getToken = () => {
 
 const Settings = () => {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, checkAuth } = useAuth();
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(true);
@@ -116,16 +118,42 @@ const Settings = () => {
   const handleSaveProfile = async () => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const payload = {
+        firstName: profileData.firstName,
+        lastName: profileData.lastName,
+        email: profileData.email,
+        profile: {
+          phone: profileData.phone,
+          department: profileData.department,
+          address: profileData.address,
+          language: profileData.language,
+          timezone: profileData.timezone,
+          dateFormat: profileData.dateFormat,
+          currency: profileData.currency,
+        },
+      };
+      const resp = await userService.updateMe(payload);
+
+      // Update local auth_user cache
+      const updatedUser = resp.data.user;
+      const authUser = {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: `${updatedUser.firstName} ${updatedUser.lastName}`,
+        role: updatedUser.role,
+        loginTime: new Date().toISOString(),
+      };
+      localStorage.setItem('auth_user', JSON.stringify(authUser));
+      checkAuth();
       
       toast({
         title: "Profile Updated",
         description: "Your profile has been updated successfully.",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Update Failed",
-        description: "Failed to update profile. Please try again.",
+        description: error?.message || "Failed to update profile. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -154,8 +182,7 @@ const Settings = () => {
 
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await userService.changePassword({ currentPassword: passwordData.current, newPassword: passwordData.new });
       toast({
         title: "Password Updated",
         description: "Your password has been changed successfully.",
@@ -167,10 +194,10 @@ const Settings = () => {
         confirm: '',
       });
       setPasswordStrength(0);
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Update Failed",
-        description: "Failed to update password. Please try again.",
+        description: error?.message || "Failed to update password. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -221,16 +248,15 @@ const Settings = () => {
   const handleSaveSystemSettings = async () => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await settingsService.updateSystem(systemSettings);
       toast({
         title: "Settings Saved",
         description: "System settings have been updated successfully.",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Save Failed",
-        description: "Failed to save system settings.",
+        description: error?.message || "Failed to save system settings.",
         variant: "destructive",
       });
     } finally {
@@ -241,22 +267,89 @@ const Settings = () => {
   const handleSaveNotifications = async () => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await settingsService.updatePreferences({
+        emailNotifications,
+        smsNotifications,
+        overdueAlerts,
+        darkMode,
+        timezone: profileData.timezone,
+        dateFormat: profileData.dateFormat,
+        currency: profileData.currency,
+        language: profileData.language,
+      });
       toast({
         title: "Preferences Saved",
         description: "Notification preferences have been updated.",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Save Failed",
-        description: "Failed to save notification preferences.",
+        description: error?.message || "Failed to save notification preferences.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
+
+  // Initial load: profile, preferences, and system settings
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const [me, prefs, sys] = await Promise.all([
+          userService.getMe(),
+          settingsService.getPreferences(),
+          settingsService.getSystem(),
+        ]);
+
+        if (!mounted) return;
+
+        // User core + profile extras
+        const u = me.data.user;
+        const extras = me.data.profile || {};
+        setProfileData(prev => ({
+          ...prev,
+          firstName: u.firstName || prev.firstName,
+          lastName: u.lastName || prev.lastName,
+          email: u.email || prev.email,
+          phone: extras.phone || prev.phone,
+          department: extras.department || prev.department,
+          address: extras.address || prev.address,
+          language: extras.language || prev.language,
+          timezone: extras.timezone || prev.timezone,
+          dateFormat: extras.dateFormat || prev.dateFormat,
+          currency: extras.currency || prev.currency,
+        }));
+
+        // Preferences
+        const p = prefs.data || {};
+        setEmailNotifications(p.emailNotifications ?? true);
+        setSmsNotifications(p.smsNotifications ?? true);
+        setOverdueAlerts(p.overdueAlerts ?? true);
+        setDarkMode(p.darkMode ?? false);
+
+        // System
+        const s = sys.data || {};
+        setSystemSettings(prev => ({
+          ...prev,
+          language: s.language || prev.language,
+          currency: s.currency || prev.currency,
+          dateFormat: s.dateFormat || prev.dateFormat,
+          numberFormat: s.numberFormat || prev.numberFormat,
+          interestRate: s.interestRate || prev.interestRate,
+          maxLoanAmount: s.maxLoanAmount || prev.maxLoanAmount,
+          minLoanAmount: s.minLoanAmount || prev.minLoanAmount,
+          goldRateSource: s.goldRateSource || prev.goldRateSource,
+        }));
+      } catch (e) {
+        // Non-blocking
+        console.error('Failed to load settings', e);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
 
   return (
     <DashboardLayout>
@@ -933,7 +1026,7 @@ const Settings = () => {
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <Label>Language</Label>
-                      <Select defaultValue="en">
+                      <Select value={systemSettings.language} onValueChange={(v) => setSystemSettings({ ...systemSettings, language: v })}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -948,7 +1041,7 @@ const Settings = () => {
                     
                     <div className="space-y-2">
                       <Label>Currency</Label>
-                      <Select defaultValue="inr">
+                      <Select value={systemSettings.currency} onValueChange={(v) => setSystemSettings({ ...systemSettings, currency: v })}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -975,7 +1068,7 @@ const Settings = () => {
                     
                     <div className="space-y-2">
                       <Label>Date Format</Label>
-                      <Select defaultValue="dd/mm/yyyy">
+                      <Select value={systemSettings.dateFormat} onValueChange={(v) => setSystemSettings({ ...systemSettings, dateFormat: v })}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -989,7 +1082,7 @@ const Settings = () => {
                     
                     <div className="space-y-2">
                       <Label>Number Format</Label>
-                      <Select defaultValue="indian">
+                      <Select value={systemSettings.numberFormat} onValueChange={(v) => setSystemSettings({ ...systemSettings, numberFormat: v })}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -1012,22 +1105,22 @@ const Settings = () => {
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="interestRate">Default Interest Rate (%)</Label>
-                      <Input id="interestRate" type="number" defaultValue="12" step="0.1" />
+                      <Input id="interestRate" type="number" value={systemSettings.interestRate} onChange={(e) => setSystemSettings({ ...systemSettings, interestRate: e.target.value })} step="0.1" />
                     </div>
                     
                     <div className="space-y-2">
                       <Label htmlFor="maxLoanAmount">Maximum Loan Amount</Label>
-                      <Input id="maxLoanAmount" type="number" defaultValue="1000000" />
+                      <Input id="maxLoanAmount" type="number" value={systemSettings.maxLoanAmount} onChange={(e) => setSystemSettings({ ...systemSettings, maxLoanAmount: e.target.value })} />
                     </div>
                     
                     <div className="space-y-2">
                       <Label htmlFor="minLoanAmount">Minimum Loan Amount</Label>
-                      <Input id="minLoanAmount" type="number" defaultValue="5000" />
+                      <Input id="minLoanAmount" type="number" value={systemSettings.minLoanAmount} onChange={(e) => setSystemSettings({ ...systemSettings, minLoanAmount: e.target.value })} />
                     </div>
                     
                     <div className="space-y-2">
                       <Label>Gold Rate Source</Label>
-                      <Select defaultValue="live">
+                      <Select value={systemSettings.goldRateSource} onValueChange={(v) => setSystemSettings({ ...systemSettings, goldRateSource: v })}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>

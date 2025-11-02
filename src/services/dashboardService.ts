@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient';
+import { apiClient, API_BASE_URL } from './apiClient';
 
 export interface DashboardStats {
   totalCustomers: number;
@@ -11,7 +11,9 @@ export interface DashboardStats {
   totalCollected: number;
   monthlyDisbursed: number;
   monthlyCollected: number;
+  outstandingAmount: number;
   overdueAmount: number;
+  overdueLoansCount?: number;
   totalInterestEarned: number;
   averageLoanAmount: number;
   collectionEfficiency: number;
@@ -52,6 +54,14 @@ class DashboardService {
       const response: any = await apiClient.get('/dashboard/stats');
       console.log('Dashboard API response:', response);
       
+      // Also fetch overdue statistics to ensure accurate overdue amounts
+      let overdueStats: any = null;
+      try {
+        overdueStats = await apiClient.get('/overdue/statistics');
+      } catch (e) {
+        console.warn('Overdue statistics fetch failed, defaulting to zeros');
+      }
+      
       const backendData = response.data; // Extract data from response
       
       if (!backendData) {
@@ -71,7 +81,11 @@ class DashboardService {
         totalCollected: backendData.financial?.totalCollected || 0,
         monthlyDisbursed: backendData.financial?.monthlyDisbursed || 0,
         monthlyCollected: backendData.financial?.monthlyCollected || 0,
-        overdueAmount: backendData.financial?.outstandingAmount || 0,
+        outstandingAmount: backendData.financial?.outstandingAmount || 0,
+        // Use overdue statistics service for accurate overdue amount
+        overdueAmount: overdueStats?.data?.totalOverdueAmount || 0,
+        overdueLoansCount: overdueStats?.data?.totalOverdueLoans || 0,
+        // Note: This represents net cashflow, not true interest. Consider replacing when detailed interest calc is available.
         totalInterestEarned: Math.max(0, (backendData.financial?.totalCollected || 0) - (backendData.financial?.totalDisbursed || 0)),
         averageLoanAmount: backendData.loans?.total > 0 ? (backendData.financial?.totalDisbursed || 0) / backendData.loans.total : 0,
         collectionEfficiency: backendData.financial?.totalDisbursed > 0 ? 
@@ -112,7 +126,9 @@ class DashboardService {
         totalCollected: 0,
         monthlyDisbursed: 0,
         monthlyCollected: 0,
+        outstandingAmount: 0,
         overdueAmount: 0,
+        overdueLoansCount: 0,
         totalInterestEarned: 0,
         averageLoanAmount: 0,
         collectionEfficiency: 0,
@@ -166,9 +182,10 @@ class DashboardService {
 
   async exportDashboardData(format: 'pdf' | 'excel' = 'pdf'): Promise<Blob> {
     try {
-      const response = await fetch(`http://localhost:3001/api/dashboard/export?format=${format}`, {
+      const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || '') : '';
+      const response = await fetch(`${API_BASE_URL}/dashboard/export?format=${format}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       
