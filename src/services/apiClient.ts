@@ -1,6 +1,11 @@
 // API Configuration and Base Setup
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+if (import.meta.env.DEV) {
+  const usingFallback = !import.meta.env.VITE_API_URL;
+  console.info('[apiClient] Base URL:', API_BASE_URL, usingFallback ? '(fallback: set VITE_API_URL to override)' : '');
+}
+
 // API Client with authentication support
 class ApiClient {
   private baseURL: string;
