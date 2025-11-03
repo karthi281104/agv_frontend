@@ -68,6 +68,7 @@ import {
 import { useLoans, useCustomerSearch, useCreateLoan, useApproveLoan, useRejectLoan, useDisburseLoan } from '@/hooks/useLoans.tsx';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { API_BASE_URL } from '@/services/apiClient';
 import SimpleParticleBackground from "@/components/SimpleParticleBackground";
 
 // Local types to match our API
@@ -181,7 +182,7 @@ const Loans = () => {
     queryFn: async () => {
       if (!selectedLoan?.id) return [];
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
-      const response = await fetch(`http://localhost:3001/api/payments?loanId=${selectedLoan.id}`, {
+      const response = await fetch(`${API_BASE_URL}/payments?loanId=${selectedLoan.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -450,7 +451,7 @@ const Loans = () => {
   const downloadLoanBill = async (loan: any) => {
     try {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
-      const response = await fetch(`http://localhost:3001/api/loans/${loan.id}/bill`, {
+      const response = await fetch(`${API_BASE_URL}/loans/${loan.id}/bill`, {
         headers: {
           'Authorization': token ? `Bearer ${token}` : ''
         }

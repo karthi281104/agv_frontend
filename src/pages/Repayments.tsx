@@ -35,6 +35,7 @@ import {
   Wallet,
   Banknote
 } from 'lucide-react';
+import { API_BASE_URL } from '@/services/apiClient';
 
 // Payment Form Schema
 const paymentSchema = z.object({
@@ -69,7 +70,7 @@ const Repayments = () => {
     queryKey: ['active-loans'],
     queryFn: async () => {
       const token = getToken();
-      const response = await fetch('http://localhost:3001/api/loans?status=ACTIVE', {
+      const response = await fetch(`${API_BASE_URL}/loans?status=ACTIVE`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -86,7 +87,7 @@ const Repayments = () => {
     queryKey: ['payments'],
     queryFn: async () => {
       const token = getToken();
-      const response = await fetch('http://localhost:3001/api/payments', {
+      const response = await fetch(`${API_BASE_URL}/payments`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -132,7 +133,7 @@ const Repayments = () => {
   const downloadReceipt = async (paymentId: string, receiptNumber?: string) => {
     try {
       const token = getToken();
-      const response = await fetch(`http://localhost:3001/api/payments/${paymentId}/receipt`, {
+      const response = await fetch(`${API_BASE_URL}/payments/${paymentId}/receipt`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) {
@@ -159,7 +160,7 @@ const Repayments = () => {
   const createPaymentMutation = useMutation({
     mutationFn: async (paymentData: any) => {
       const token = getToken();
-      const response = await fetch('http://localhost:3001/api/payments', {
+      const response = await fetch(`${API_BASE_URL}/payments`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

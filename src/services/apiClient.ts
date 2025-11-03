@@ -10,7 +10,11 @@ class ApiClient {
     this.baseURL = baseURL;
     // Safely get token from localStorage if available
     try {
-      this.token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (typeof window !== 'undefined') {
+        this.token = localStorage.getItem('token') || localStorage.getItem('auth_token');
+      } else {
+        this.token = null;
+      }
     } catch {
       this.token = null;
     }
@@ -103,7 +107,11 @@ class ApiClient {
   refreshToken() {
     // Update token from localStorage in case it was refreshed elsewhere
     try {
-      this.token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (typeof window !== 'undefined') {
+        this.token = localStorage.getItem('token') || localStorage.getItem('auth_token');
+      } else {
+        this.token = null;
+      }
     } catch {
       this.token = null;
     }

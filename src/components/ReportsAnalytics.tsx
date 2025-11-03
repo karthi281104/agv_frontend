@@ -22,6 +22,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import SimpleParticleBackground from './SimpleParticleBackground';
+import { API_BASE_URL } from '@/services/apiClient';
 
 interface ReportStats {
   customers: {
@@ -76,7 +77,7 @@ export function ReportsAnalytics() {
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      const response = await fetch('http://localhost:3001/api/dashboard/stats', {
+      const response = await fetch(`${API_BASE_URL}/dashboard/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -95,7 +96,7 @@ export function ReportsAnalytics() {
     queryKey: ['dashboard-charts'],
     queryFn: async () => {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      const response = await fetch('http://localhost:3001/api/dashboard/charts', {
+      const response = await fetch(`${API_BASE_URL}/dashboard/charts`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

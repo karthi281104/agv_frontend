@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { apiClient, API_BASE_URL } from '@/services/apiClient';
 
 // Get the actual auth token from localStorage (set by AuthProvider)
 const getFreshToken = () => {
@@ -80,28 +81,9 @@ const loanService = {
   getLoans: async (): Promise<Loan[]> => {
     console.log('🌐 getLoans: Starting API call...');
     
-    const token = getFreshToken(); // Use fresh token
-    console.log('🔑 getLoans: Using fresh token...');
-    
-    const response = await fetch('http://localhost:3001/api/loans', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    console.log('📡 getLoans: Response status:', response.status);
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        console.error('❌ getLoans: Authentication failed');
-        throw new Error('Authentication failed - please login again');
-      }
-      console.error('❌ getLoans: API error:', response.status);
-      throw new Error(`Failed to fetch loans: ${response.status}`);
-    }
-
-    const result = await response.json();
+    // Ensure apiClient has the latest token
+    apiClient.refreshToken();
+    const result: any = await apiClient.get('/loans');
     console.log('📋 getLoans: Raw result:', result);
     
     if (!result.success || !result.data) {
@@ -110,7 +92,7 @@ const loanService = {
     }
     
     // Fix: Extract loans from nested structure (result.data.data)
-    const loans = result.data.data || result.data || [];
+  const loans = result.data?.data || result.data || [];
     console.log('🔧 getLoans: Fixed data extraction, loans found:', loans.length);
     console.log('💼 getLoans: Found loans:', loans.length);
     
@@ -142,29 +124,13 @@ const loanService = {
   searchCustomers: async (searchTerm: string): Promise<Customer[]> => {
     console.log('🔍 searchCustomers: Searching for:', searchTerm);
     
-    const token = getFreshToken(); // Use fresh token
-    
-    const endpoint = searchTerm.trim() 
-      ? `http://localhost:3001/api/customers/search?q=${encodeURIComponent(searchTerm)}`
-      : `http://localhost:3001/api/customers?limit=10`;
-      
-    console.log('🌐 Customer API call to:', endpoint);
-    
-    const response = await fetch(endpoint, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    console.log('📡 API Response status:', response.status);
-
-    if (!response.ok) {
-      console.error('❌ Customer API failed:', response.status, response.statusText);
-      throw new Error('Failed to search customers');
-    }
-
-    const result = await response.json();
+    // Ensure apiClient has the latest token
+    apiClient.refreshToken();
+    const endpoint = searchTerm.trim()
+      ? `/customers/search?q=${encodeURIComponent(searchTerm)}`
+      : `/customers?limit=10`;
+    console.log('🌐 Customer API call to:', `${API_BASE_URL}${endpoint}`);
+    const result: any = await apiClient.get(endpoint);
     console.log('👥 searchCustomers: Raw result:', result);
     
     // Fix: Handle different response structures
@@ -184,26 +150,11 @@ const loanService = {
   createLoan: async (loanData: CreateLoanData): Promise<Loan> => {
     console.log('📝 createLoan: Creating new loan...');
     
-    const token = getFreshToken(); // Use fresh token
-    
-    const response = await fetch('http://localhost:3001/api/loans', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(loanData)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to create loan');
-    }
-
-    const result = await response.json();
+    // Ensure apiClient has the latest token
+    apiClient.refreshToken();
+    const result: any = await apiClient.post('/loans', loanData);
     console.log('✅ createLoan: Loan created successfully');
-    
-    return result.data;
+    return result?.data || result;
   }
 };
 
@@ -270,22 +221,9 @@ export const useApproveLoan = () => {
   
   return useMutation({
     mutationFn: async ({ loanId, remarks }: { loanId: string; remarks?: string }) => {
-      const token = getFreshToken();
-      const response = await fetch(`http://localhost:3001/api/loans/${loanId}/approve`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ remarks })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to approve loan');
-      }
-
-      return response.json();
+      apiClient.refreshToken();
+      const result: any = await apiClient.put(`/loans/${loanId}/approve`, { remarks });
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loans'] });
@@ -303,22 +241,9 @@ export const useRejectLoan = () => {
   
   return useMutation({
     mutationFn: async ({ loanId, remarks }: { loanId: string; remarks: string }) => {
-      const token = getFreshToken();
-      const response = await fetch(`http://localhost:3001/api/loans/${loanId}/reject`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ remarks })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to reject loan');
-      }
-
-      return response.json();
+      apiClient.refreshToken();
+      const result: any = await apiClient.put(`/loans/${loanId}/reject`, { remarks });
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loans'] });
@@ -336,21 +261,9 @@ export const useDisburseLoan = () => {
   
   return useMutation({
     mutationFn: async (loanId: string) => {
-      const token = getFreshToken();
-      const response = await fetch(`http://localhost:3001/api/loans/${loanId}/disburse`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to disburse loan');
-      }
-
-      return response.json();
+      apiClient.refreshToken();
+      const result: any = await apiClient.put(`/loans/${loanId}/disburse`);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loans'] });
