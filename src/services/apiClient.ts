@@ -1,9 +1,19 @@
 // API Configuration and Base Setup
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+let RUNTIME_API_OVERRIDE: string | null = null;
+try {
+  if (typeof window !== 'undefined') {
+    RUNTIME_API_OVERRIDE = localStorage.getItem('api_base_url');
+  }
+} catch {
+  RUNTIME_API_OVERRIDE = null;
+}
+
+const API_BASE_URL = (RUNTIME_API_OVERRIDE || import.meta.env.VITE_API_URL || 'http://localhost:3001/api');
 
 if (import.meta.env.DEV) {
-  const usingFallback = !import.meta.env.VITE_API_URL;
-  console.info('[apiClient] Base URL:', API_BASE_URL, usingFallback ? '(fallback: set VITE_API_URL to override)' : '');
+  const usingRuntime = !!RUNTIME_API_OVERRIDE;
+  const usingFallback = !import.meta.env.VITE_API_URL && !usingRuntime;
+  console.info('[apiClient] Base URL:', API_BASE_URL, usingRuntime ? '(runtime override via localStorage api_base_url)' : usingFallback ? '(fallback: set VITE_API_URL to override)' : '');
 }
 
 // API Client with authentication support
