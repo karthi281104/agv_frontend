@@ -1030,60 +1030,70 @@ const Customers = () => {
 
           {/* Search and Filter Section */}
           <Card className="mb-4 md:mb-6">
-            <CardContent className="p-4 md:p-6">
-              <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 md:gap-4">
-                <div className="flex-1 relative">
+            <CardContent className="p-3 sm:p-4 md:p-6">
+              <div className="flex flex-col gap-3">
+                {/* Search Bar - Full Width */}
+                <div className="w-full relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <Input
-                    placeholder="Search customers by name, mobile, or customer ID..."
+                    placeholder="Search customers..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 w-full"
                   />
                 </div>
                 
-                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                  <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="pending_verification">Pending Verification</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant={hasActiveLoans ? 'default' : 'outline'}
-                  onClick={() => setHasActiveLoans(v => !v)}
-                >
-                  With Active Loans
-                </Button>
-                <Select value={sortBy} onValueChange={(v:any)=>setSortBy(v)}>
-                  <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="createdDesc">Newest First</SelectItem>
-                    <SelectItem value="createdAsc">Oldest First</SelectItem>
-                    <SelectItem value="nameAsc">Name A→Z</SelectItem>
-                    <SelectItem value="nameDesc">Name Z→A</SelectItem>
-                    <SelectItem value="outstandingDesc">Outstanding High→Low</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={String(pageSize)} onValueChange={(v:any)=>{ setPageSize(Number(v)); setCurrentPage(1); }}>
-                  <SelectTrigger className="w-full sm:w-28">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10 / page</SelectItem>
-                    <SelectItem value="20">20 / page</SelectItem>
-                    <SelectItem value="50">50 / page</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button onClick={handleResetFilters} variant="ghost">
-                  Reset
-                </Button>
+                {/* Filters Row - Responsive Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
+                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="pending_verification">Pending Verification</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={sortBy} onValueChange={(v:any)=>setSortBy(v)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="createdDesc">Newest First</SelectItem>
+                      <SelectItem value="createdAsc">Oldest First</SelectItem>
+                      <SelectItem value="nameAsc">Name A→Z</SelectItem>
+                      <SelectItem value="nameDesc">Name Z→A</SelectItem>
+                      <SelectItem value="outstandingDesc">Outstanding High→Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={String(pageSize)} onValueChange={(v:any)=>{ setPageSize(Number(v)); setCurrentPage(1); }}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10 / page</SelectItem>
+                      <SelectItem value="20">20 / page</SelectItem>
+                      <SelectItem value="50">50 / page</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Button
+                    variant={hasActiveLoans ? 'default' : 'outline'}
+                    onClick={() => setHasActiveLoans(v => !v)}
+                    className="w-full text-xs sm:text-sm"
+                  >
+                    <span className="hidden sm:inline">With Active Loans</span>
+                    <span className="sm:hidden">Active Loans</span>
+                  </Button>
+                  
+                  <Button onClick={handleResetFilters} variant="ghost" className="w-full">
+                    Reset
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1121,47 +1131,49 @@ const Customers = () => {
                 <>
                   {/* Desktop Table View */}
                   {selectedIds.size > 0 && (
-                    <div className="mb-3 flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Selected: {selectedIds.size}</span>
-                      <Button variant="outline" size="sm" onClick={() => bulkUpdate({ kycVerified: true } as any)}>
+                    <div className="mb-3 flex flex-wrap items-center gap-2 p-2 bg-blue-50 rounded-lg">
+                      <span className="text-xs sm:text-sm text-gray-600 font-medium">Selected: {selectedIds.size}</span>
+                      <Button variant="outline" size="sm" onClick={() => bulkUpdate({ kycVerified: true } as any)} className="text-xs">
                         Verify KYC
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => bulkUpdate({ isActive: true } as any)}>
+                      <Button variant="outline" size="sm" onClick={() => bulkUpdate({ isActive: true } as any)} className="text-xs">
                         Activate
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => bulkUpdate({ isActive: false } as any)}>
+                      <Button variant="destructive" size="sm" onClick={() => bulkUpdate({ isActive: false } as any)} className="text-xs">
                         Deactivate
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={clearSelection}>Clear</Button>
+                      <Button variant="ghost" size="sm" onClick={clearSelection} className="text-xs">Clear</Button>
                     </div>
                   )}
-                  <div className="hidden lg:block overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-10">
-                            <input
-                              type="checkbox"
-                              onChange={(e)=>{
-                                const all = new Set<string>();
-                                customersData?.customers.forEach((c:any)=>all.add(c.id));
-                                setSelectedIds(e.target.checked ? all : new Set());
-                              }}
-                              checked={customersData?.customers?.length>0 && customersData?.customers?.every((c:any)=>selectedIds.has(c.id))}
-                              aria-label="Select all"
-                            />
-                          </TableHead>
-                          <TableHead>Customer ID</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Contact</TableHead>
-                          <TableHead>Location</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Active Loans</TableHead>
-                          <TableHead>Total Outstanding</TableHead>
-                          <TableHead>Created</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
+                  <div className="hidden lg:block overflow-x-auto -mx-4 sm:-mx-6">
+                    <div className="inline-block min-w-full align-middle px-4 sm:px-6">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-10">
+                              <input
+                                type="checkbox"
+                                onChange={(e)=>{
+                                  const all = new Set<string>();
+                                  customersData?.customers.forEach((c:any)=>all.add(c.id));
+                                  setSelectedIds(e.target.checked ? all : new Set());
+                                }}
+                                checked={customersData?.customers?.length>0 && customersData?.customers?.every((c:any)=>selectedIds.has(c.id))}
+                                aria-label="Select all"
+                                className="rounded border-gray-300"
+                              />
+                            </TableHead>
+                            <TableHead className="whitespace-nowrap">Customer ID</TableHead>
+                            <TableHead className="whitespace-nowrap">Name</TableHead>
+                            <TableHead className="whitespace-nowrap">Contact</TableHead>
+                            <TableHead className="whitespace-nowrap">Location</TableHead>
+                            <TableHead className="whitespace-nowrap">Status</TableHead>
+                            <TableHead className="whitespace-nowrap">Active Loans</TableHead>
+                            <TableHead className="whitespace-nowrap">Total Outstanding</TableHead>
+                            <TableHead className="whitespace-nowrap">Created</TableHead>
+                            <TableHead className="whitespace-nowrap">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
                       <TableBody>
                         {(customersData?.customers || []).slice().sort((a:any,b:any)=>{
                           if (sortBy === 'createdDesc') return new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime();
@@ -1312,6 +1324,7 @@ const Customers = () => {
                         ))}
                       </TableBody>
                     </Table>
+                    </div>
                   </div>
 
                   {/* Mobile Card View */}
@@ -1460,27 +1473,48 @@ const Customers = () => {
               {/* Pagination */}
               {customersData && customersData.total > pageSize && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 pt-4 border-t">
-                  <div className="text-sm text-gray-500 order-2 sm:order-1">
+                  <div className="text-xs sm:text-sm text-gray-500 order-2 sm:order-1">
                     Page {currentPage} of {Math.ceil(customersData.total / pageSize)}
                   </div>
-                  <div className="flex items-center gap-2 order-1 sm:order-2">
+                  <div className="flex items-center gap-2 order-1 sm:order-2 flex-wrap justify-center">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="text-xs"
+                    >
+                      First
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
                       className="text-xs"
                     >
                       Previous
                     </Button>
+                    <span className="text-xs sm:text-sm px-2">
+                      {currentPage}
+                    </span>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(prev => prev + 1)}
-                      disabled={!customersData.hasMore}
+                      onClick={() => setCurrentPage(p => Math.min(Math.ceil(customersData.total / pageSize), p + 1))}
+                      disabled={currentPage >= Math.ceil(customersData.total / pageSize)}
                       className="text-xs"
                     >
                       Next
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(Math.ceil(customersData.total / pageSize))}
+                      disabled={currentPage >= Math.ceil(customersData.total / pageSize)}
+                      className="text-xs"
+                    >
+                      Last
                     </Button>
                   </div>
                 </div>
